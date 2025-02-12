@@ -29,6 +29,8 @@ curl -o ~/.gdbinit https://raw.githubusercontent.com/danielinux/gdb-ollama/refs/
    - It will send the captured information to **Ollama AI** for analysis.
    - The AI-generated response will be displayed inside the GDB UI.
 
+![Demo gif of gdb-ollama](/gdb-ollama.gif)
+
 ## Requirements
 - **GDB with Python support** (GDB 8.0+ recommended)
 - **Ollama AI API running locally** (default: `http://localhost:11434`)
