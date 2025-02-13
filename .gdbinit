@@ -23,7 +23,7 @@ import textwrap
 from collections import deque
 
 global Prompt
-Prompt = False
+Prompt = None
 
 
 class ai_window:
@@ -35,15 +35,17 @@ class ai_window:
         self.arch = gdb.execute('show architecture', to_string=True).rstrip('\n').split(' ')[-1].rstrip(').')
         self.DEFAULT_HOST = 'http://localhost:11434'
         self.DEFAULT_MODEL = 'mistral:latest'
-        self.DEFAULT_TIMEOUT = 60
+        #self.DEFAULT_MODEL = 'falcon3:10b'
+        self.DEFAULT_TIMEOUT = 120
         self._tui_window.title = 'gdb-ollama ['+self.arch+']: (model: '+self.DEFAULT_MODEL+')'
     def gdb_prompt(self):
         global Prompt
         if Prompt:
-            Prompt = False
-            self.prompt()
+            txt = Prompt
+            Prompt = None
+            self.prompt(txt)
         self.render()
-    def prompt(self):
+    def prompt(self, txt):
         source = None
         fr = gdb.selected_frame()
         source = gdb.execute("list " + fr.find_sal().symtab.filename+":"+fr.name(), to_string=True)
@@ -58,9 +60,12 @@ class ai_window:
                     'And the following GDB session history:\n'
                     '<START_GDB>' + history + '<END_GDB>\n'
                     'You are a debugging assistant, running from within GDB.'
-                    'Provide analysis, debugging hints, and next steps. Do not suggest to use a debugger, this tool is already part of gdb.'
-                    'Keep answers short and do not provide code longer than one single line.'
-                    'End all answers with <EOT>"""')
+                     'Do not suggest to use a debugger, this tool is already part of gdb.'
+                    'Keep answers short and do not provide code longer than one single line.\n')
+        if txt != None and txt != " ":
+            chat_msg += (txt + '\n"""')
+        else:
+            chat_msg += ('Provide analysis, debugging hints, and next steps.\n"""')
         asyncio.run(self.main(self.DEFAULT_HOST, self.DEFAULT_MODEL, self.DEFAULT_TIMEOUT, chat_msg))
         self.render()
 
@@ -116,6 +121,7 @@ class ai_window:
 
         if assistant_message:
             messages.append({"role": "assistant", "content": assistant_message.strip()})
+        gdb.execute('focus cmd')
 
     async def main(self, baseurl, model, timeout, user_message):
         conversation_history = []
@@ -133,7 +139,10 @@ class OllamaDebug(gdb.Command):
         gdb.execute('lay ailayout')
         gdb.execute('foc ai')
         global Prompt
-        Prompt = True
+        if arg:
+            Prompt = arg
+        else:
+            Prompt = " "
 
 gdb.register_window_type('ai', ai_window)
 
