@@ -3,9 +3,8 @@
 
 set logging enabled off
 set logging file gdb.out
-set logging overwrite on
-set logging enabled on
 set listsize 4000
+set logging enabled on
 
 python
 
@@ -20,6 +19,7 @@ import threading
 import os
 import time
 import textwrap
+import re
 from collections import deque
 
 global Prompt
@@ -33,10 +33,11 @@ class ai_window:
         gdb.events.before_prompt.connect(self._before_prompt_listener)
         self.answer = ""
         self.arch = gdb.execute('show architecture', to_string=True).rstrip('\n').split(' ')[-1].rstrip(').')
-        self.DEFAULT_HOST = 'http://localhost:11434'
-        self.DEFAULT_MODEL = 'mistral:latest'
-        #self.DEFAULT_MODEL = 'falcon3:10b'
-        self.DEFAULT_TIMEOUT = 120
+        self.DEFAULT_HOST='http://deathstar:11434'
+        self.DEFAULT_MODEL = 'qwen2.5-coder:7b'
+        #self.DEFAULT_MODEL = 'deepseek-r1:70b'
+        #self.DEFAULT_MODEL = 'deepseek-coder-v2:16b-lite-base-q4_0'
+        self.DEFAULT_TIMEOUT = 300
         self._tui_window.title = 'gdb-ollama ['+self.arch+']: (model: '+self.DEFAULT_MODEL+')'
     def gdb_prompt(self):
         global Prompt
@@ -55,17 +56,39 @@ class ai_window:
         with open("gdb.out", "r") as f:
             history = f.read()
 
-        chat_msg = ('"""Given the following code snippet, on architecture '+ self.arch +':\n'
-                    '<START_CODE>' + source + '<END_CODE>' +
-                    'And the following GDB session history:\n'
-                    '<START_GDB>' + history + '<END_GDB>\n'
-                    'You are a debugging assistant, running from within GDB.'
-                     'Do not suggest to use a debugger, this tool is already part of gdb.'
-                    'Keep answers short and do not provide code longer than one single line.\n')
+        #chat_msg = ('"""Given the following code snippet, on architecture '+ self.arch +':\n'
+        #            '<START_CODE>' + source + '<END_CODE>' +
+        #            'And the following GDB session history:\n'
+        #            '<START_GDB>' + history + '<END_GDB>\n'
+        #            'You are a debugging assistant, running from within GDB. You can provide debugging hints, analysis, and next steps.\n'
+        #            'Keep answer short and work one step at a time.\n'
+        #            'You can decide to execute GDB commands to inspect registers, variables etc. using valid gdb syntax.\n'
+        #            'Do not assume memory-mapped registers are known by name, use address to dereference.\n'
+        #            'Do not use GDB commands to interact with the program execution, only for inspection to collect more information to keep investigating, and only if needed.\n'
+        #            'Interact directly with gdb using GDB tag followed by the command enclosed them in curly brackets, e.g.:\nGDB{x /4x $sp; info registers}\n'
+        #            'Ignore GDB crashes or errors from previous sessions.\n'
+        #    )
+        chat_msg = ('Analyze the GDB context: \n'+
+                    history + '\n' +
+                    'and the code context: \n' +
+                    source +' \n' +
+                    '\n' +
+                    'You are the GDB assistant. Based on the code and the GDB context provided, inspect the code running and provide suggestions. ' +
+                    'Optionally, you can decide to send GDB commands to interact with the live GDB session ongoing. Do not interact with the program execution. ' +
+                    'Only use commands to collect information about the running session, such as register values, variables, memory content and stack traces. ' +
+                    'To send GDB commands directly to the debugger, provide a line with GDB tag followed by a single command enclosed in curly brackets, e.g.\nGDB{info registers}\n' +
+                    'Do not assume memory-mapped registers are known by name, use address to dereference.\n' +
+                    'Ignore GDB crashes or errors from previous sessions.\n'
+        )
+
+
+
         if txt != None and txt != " ":
             chat_msg += (txt + '\n"""')
         else:
             chat_msg += ('Provide analysis, debugging hints, and next steps.\n"""')
+        with open("gdb.out", "a") as f:
+            f.write("prompt: " + chat_msg + "\n")
         asyncio.run(self.main(self.DEFAULT_HOST, self.DEFAULT_MODEL, self.DEFAULT_TIMEOUT, chat_msg))
         self.render()
 
@@ -92,7 +115,9 @@ class ai_window:
             'Host': endpoint.split('//')[1].split('/')[0]
         }
         data = {'model': model, 'messages': messages}
-        assistant_message = ""
+        assistant_message = "\n\n"
+        self.answer += '\n'
+
 
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -109,6 +134,7 @@ class ai_window:
                                     if '<EOT>' in content:
                                         gdb.execute("echo [End of AI Debugging Assistance]")
                                         break
+
                     else:
                         await response.aread()
                         raise Exception(f"Error: {response.status_code} - {response.text}")
@@ -122,6 +148,30 @@ class ai_window:
         if assistant_message:
             messages.append({"role": "assistant", "content": assistant_message.strip()})
         gdb.execute('focus cmd')
+        with open("gdb.out", "a") as f:
+            f.write("answer: " + assistant_message + "\n")
+        matches = re.finditer(r'GDB{(.+?)}', assistant_message)
+        if matches:
+            commands = [match.group(1) for match in matches]
+            for xcmd in commands:
+                err = False
+                try:
+                    res = gdb.execute(xcmd, to_string=True)
+                except gdb.error as e:
+                    res = str(e)
+                    err = True
+
+                with open("gdb.out", "a") as f:
+                    f.write("gdb command: " + xcmd + "\n")
+                    f.write("gdb command result: " + res + "\n")
+                self.answer += '\n'
+                self.answer += "(gdb) " + xcmd + "\n"
+                if err:
+                    self.answer += res + "\n"
+                else:
+                    self.answer += res + "\n"
+                self.render()
+
 
     async def main(self, baseurl, model, timeout, user_message):
         conversation_history = []
@@ -132,12 +182,17 @@ class ai_window:
 class OllamaDebug(gdb.Command):
     def __init__(self):
         super(OllamaDebug, self).__init__("ollama-debug", gdb.COMMAND_USER)
-
-    def invoke(self, arg, from_tty):
         gdb.execute('lay split')
         gdb.execute('tui new-layout ailayout {-horizontal src 1 asm 1} 2 ai 1 cmd 1 status 1')
         gdb.execute('lay ailayout')
-        gdb.execute('foc ai')
+        gdb.execute('focus cmd', to_string=True)
+
+
+    def invoke(self, arg, from_tty):
+        x = gdb.execute('set logging enabled off', to_string=True)
+        x = gdb.execute('set logging file gdb.out', to_string=True)
+        x = gdb.execute('set logging enabled on', to_string=True)
+        gdb.execute('foc ai', to_string=True)
         global Prompt
         if arg:
             Prompt = arg
