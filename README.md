@@ -22,19 +22,29 @@ curl -o ~/.gdbinit https://raw.githubusercontent.com/danielinux/gdb-ollama/refs/
 
 2. **Trigger AI debugging assistance** by running:
    ```gdb
-   (gdb) ollama-debug
+   (gdb) ollama
    ```
 
-   - This will capture the backtrace and source code context.
-   - It will send the captured information to **Ollama AI** for analysis.
-   - The AI-generated response will be displayed inside the GDB UI.
+  - gdb-ollama has access to your debugging session and can provide help with analyzing the current state, suggesting fixes, and providing explanations.
+
+### Environment variables
+
+Running ollama on another computer? Set `OLLAMA_HOST` accordingly.
+E.g. 
+```sh
+export OLLAMA_HOST=http://your-ollama-server:11434
+```
+
+## Demo
+Here's a quick demo of `gdb-ollama` in action:
 
 ![Demo gif of gdb-ollama](/gdb-ollama.gif)
 
 ## Requirements
-- **GDB with Python support** (GDB 8.0+ recommended)
-- **Ollama AI API running locally** (default: `http://localhost:11434`)
+- **Any GDB compiled with Python support** (GDB 8.0+ recommended)
+- **Ollama AI API running locally** (or on a reachable server) (default: `http://localhost:11434`, change via `OLLAMA_HOST` environment variable)
 - **Python 3** (for AI query handling)
+- **Ollama Python module** 
 
 ## License
 `gdb-ollama` is licensed under the **GNU General Public License v3 (GPL-3.0)**.
@@ -43,5 +53,5 @@ curl -o ~/.gdbinit https://raw.githubusercontent.com/danielinux/gdb-ollama/refs/
 Contributions are welcome! Feel free to submit issues or pull requests.
 
 ## Author
-Developed by @danielinux. (README.md is AI generated.)
+Developed by @danielinux.
 
