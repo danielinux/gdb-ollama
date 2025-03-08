@@ -254,12 +254,15 @@ class ai_window():
                     'Usage: TOOL_CALL:{"name":"break_at", "arguments":{"address": address_of_the_symbol }} Set a breakpoint at the specified address.\n' +
                     'Usage: TOOL_CALL:{"name":"break", "arguments":{"function": address_of_the_symbol }} Set a breakpoint at the specified function.\n' +
                     'Usage: TOOL_CALL:{"name":"delete_breakpoint", "arguments":{"number": number_of_the_breakpoint }} Delete the breakpoint with the specified number. \n' +
+                    'Usage: TOOL_CALL:{"name":"delete_all_breakpoints", "arguments":{}} Delete all breakpoints \n'+
                     'Usage: TOOL_CALL:{"name":"show_breakpoints", "arguments":{}} Show all breakpoints set in the current session.\n' +
                     'Usage: TOOL_CALL:{"name":"evaluate_expression", "arguments":{"expression": expression_to_evaluate}} Evaluate a C expression and return the result \n' +
+                    'Usage: TOOL_CALL:{"name":"stack_climb", "arguments":{}} Climb up the stack trace by one frame.\n' +
+                    'Usage: TOOL_CALL:{"name":"stack_descend", "arguments":{}} Descend down the stack trace by one frame.\n' +
                     'Usage: TOOL_CALL:{"name":"reset", "arguments" : {}} Reset the current GDB session, e.g. restart the program, or send "mon reset" to the remote target.\n' +
                     'The current architecture is ' + self.arch + '\n' +
-                    'and the current context \n' + gdb.execute('info line', to_string = True) +
-                    '\n' + gdb.execute('where', to_string = True) + '\n' +
+                    #'and the current context \n' + gdb.execute('info line', to_string = True) +
+                    #'\n' + gdb.execute('where', to_string = True) + '\n' +
                     'Based on the code and the GDB context provided, inspect the code running and provide suggestions. ' +
                     'Ignore GDB crashes or errors from previous sessions.\n' +
                     'Query from user: '  + txt +
@@ -376,10 +379,17 @@ class ai_window():
                     res += gdb.execute('info breakpoints', to_string=True)
                 elif xcmd['name'] == 'delete_breakpoint':
                     res += gdb.execute(f'delete {xcmd["arguments"]["breakpoint_number"]}', to_string=True)  # Delete breakpoint by number
+                elif xcmd['name'] == 'delete_all_breakpoints':
+                    res += gdb.execute('d', to_string=True)
+                elif xcmd['name'] == 'stack_climb':
+                    res += gdb.execute('up', to_string = True)
+                elif xcmd['name'] == 'stack_descend':
+                    res += gdb.execute('down', to_string = True)
+
                 elif xcmd['name'] == 'reset':
                     info = gdb.execute('info conn', to_string=True)
-                    if 'native' in info.lower():
-                        res += gdb.execute('restart', to_string = True)
+                    if 'native' in info.lower() or 'no connection' in info.lower():
+                        res += gdb.execute('run', to_string = True)
                     else:
                         res += gdb.execute('mon reset', to_string = True)
                         #res += gdb.execute('mon reset 0', to_string = True)

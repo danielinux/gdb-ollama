@@ -22,10 +22,10 @@ curl -o ~/.gdbinit https://raw.githubusercontent.com/danielinux/gdb-ollama/refs/
 
 2. **Trigger AI debugging assistance** by running:
    ```gdb
-   (gdb) ollama
+   (gdb) ollama [message]
    ```
 
-  - gdb-ollama has access to your debugging session and can provide help with analyzing the current state, suggesting fixes, and providing explanations.
+  - gdb-ollama has access to your debugging session and source code, and can help with analyzing the current state, suggesting fixes, and providing explanations.
 
 ### Environment variables
 
@@ -36,7 +36,7 @@ export OLLAMA_HOST=http://your-ollama-server:11434
 ```
 
 ## Demo
-Here's a quick demo of `gdb-ollama` in action:
+Here's a demo of `gdb-ollama` in action:
 
 ![Demo gif of gdb-ollama](/gdb-ollama.gif)
 
